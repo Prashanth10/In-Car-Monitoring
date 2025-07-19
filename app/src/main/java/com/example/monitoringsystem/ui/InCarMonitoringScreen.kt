@@ -149,7 +149,7 @@ fun InCarMonitoringScreen(
                     }
                 }
 
-                // Processing and ML Detection Status
+                // Processing and TensorFlow Lite Detection Status
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -176,7 +176,7 @@ fun InCarMonitoringScreen(
                             color = if (uiState.isProcessing) Color.Green else Color.Gray
                         )
 
-                        // ML Detection Status
+                        // TensorFlow Lite Detection Status
                         if (uiState.isProcessing) {
                             Spacer(modifier = Modifier.width(16.dp))
                             Box(
@@ -187,7 +187,7 @@ fun InCarMonitoringScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "ML Active",
+                                text = "TF Lite Active",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.Blue
                             )
@@ -222,7 +222,7 @@ fun InCarMonitoringScreen(
                     // Show detection stats when processing
                     if (uiState.isProcessing && uiState.detectionStats.totalDetections > 0) {
                         Text(
-                            text = "Detections: ${uiState.detectionStats.totalDetections} | " +
+                            text = "TF Lite: ${uiState.detectionStats.totalDetections} detections | " +
                                     "People: ${uiState.detectionStats.peopleDetectedCount} | " +
                                     "Avg: ${uiState.detectionStats.averageInferenceTime.toInt()}ms",
                             style = MaterialTheme.typography.bodySmall,
@@ -333,7 +333,7 @@ fun InCarMonitoringScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "Start monitoring to see AI analysis and person detection...",
+                                    text = "Start monitoring to see AI analysis and TensorFlow Lite person detection...",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                     textAlign = TextAlign.Center

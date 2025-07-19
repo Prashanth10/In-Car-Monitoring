@@ -86,9 +86,10 @@ dependencies {
     // Activity Result
     implementation("androidx.activity:activity-ktx:1.8.2")
 
-    // ML Kit Object Detection
-    implementation("com.google.mlkit:object-detection:17.0.1")
-    implementation("com.google.mlkit:object-detection-custom:17.0.1")
+    // TensorFlow Lite
+    implementation("org.tensorflow:tensorflow-lite:2.13.0")
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.13.0")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
     // Camera for frame capture
     implementation("androidx.camera:camera-core:1.3.1")

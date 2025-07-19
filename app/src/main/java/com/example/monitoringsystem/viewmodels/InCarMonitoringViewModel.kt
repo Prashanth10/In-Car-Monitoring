@@ -66,7 +66,7 @@ class InCarMonitoringViewModel : ViewModel() {
             .build()
 
         // Initialize ML components
-        personDetectionEngine = PersonDetectionEngine()
+        personDetectionEngine = PersonDetectionEngine(context)
         videoFrameExtractor = VideoFrameExtractor()
 
         // Load default video or selected video
@@ -128,7 +128,7 @@ class InCarMonitoringViewModel : ViewModel() {
 
         _uiState.value.player?.play()
 
-        // Start frame processing with ML detection
+        // Start frame processing with TensorFlow Lite detection
         viewModelScope.launch {
             var frameCount = 0
             while (_uiState.value.isProcessing) {
@@ -143,7 +143,7 @@ class InCarMonitoringViewModel : ViewModel() {
             }
         }
 
-        // Start ML detection processing (separate coroutine for different timing)
+        // Start TensorFlow Lite person detection processing (separate coroutine)
         startPersonDetection()
     }
 
@@ -151,7 +151,7 @@ class InCarMonitoringViewModel : ViewModel() {
         viewModelScope.launch {
             while (_uiState.value.isProcessing) {
                 processFrameForDetection()
-                delay(200) // Process ML detection every 200ms (5 FPS for ML)
+                delay(300) // Process TensorFlow Lite detection every 300ms (~3 FPS for ML)
             }
         }
     }
@@ -165,10 +165,10 @@ class InCarMonitoringViewModel : ViewModel() {
 //                        val bitmap = extractor.extractFrameFromPlayerView(view)
                         val bitmap = extractor.extractVideoFrameFromPlayerView(view)
                         bitmap?.let { frame ->
-                            // Scale for optimal ML performance
+                            // Scale for optimal TensorFlow Lite performance
                             val scaledFrame = extractor.scaleBitmapForML(frame, 640)
 
-                            // Perform detection
+                            // Perform TensorFlow Lite detection
                             val result = detector.detectPersons(scaledFrame)
 
                             // Update UI with results
@@ -189,7 +189,6 @@ class InCarMonitoringViewModel : ViewModel() {
     }
 
     private fun updateDetectionResults(result: DetectionResult) {
-        Log.d("InCarMonitoring", "updateDetectionResults: ${result.detections.size}")
         val currentStats = _uiState.value.detectionStats
         val newStats = currentStats.copy(
             totalDetections = currentStats.totalDetections + 1,
@@ -235,7 +234,7 @@ class InCarMonitoringViewModel : ViewModel() {
                 append("🎥 Video Source: $videoSource\n")
                 append("🔐 Access Type: $accessType\n\n")
 
-                append("🤖 Person Detection Status: ACTIVE\n")
+                append("🤖 TensorFlow Lite Person Detection: ACTIVE\n")
                 append("👥 Total ML Detections: ${stats.totalDetections}\n")
                 append("🎯 People Detected: ${stats.peopleDetectedCount}\n")
                 append("👤 Current People in Frame: $currentDetections\n")
@@ -248,11 +247,12 @@ class InCarMonitoringViewModel : ViewModel() {
                     if (currentDetections > 0) {
                         append("• $currentDetections person(s) currently visible\n")
                     }
-                    append("• Real-time ML inference active\n")
-                    append("• Bounding boxes displayed on video\n")
+                    append("• Real-time TensorFlow Lite inference active\n")
+                    append("• COCO MobileNet SSD model running on-device\n")
+                    append("• Bounding boxes displayed with confidence scores\n")
                 } else {
-                    append("• ML detection running, no people detected yet\n")
-                    append("• System ready to detect occupants\n")
+                    append("• TensorFlow Lite detection running, no people detected yet\n")
+                    append("• COCO-trained MobileNet SSD ready to detect occupants\n")
                 }
                 append("• Monitoring system functioning optimally\n")
                 append("• Road conditions: Clear visibility\n")
@@ -262,12 +262,12 @@ class InCarMonitoringViewModel : ViewModel() {
                 append("🔍 Recommendations:\n")
                 append("• Continue monitoring for fatigue signs\n")
                 append("• Maintain current driving behavior\n")
-                append("• Person detection enhancing safety monitoring\n")
+                append("• TensorFlow Lite person detection enhancing safety monitoring\n")
                 append("• System functioning optimally\n")
                 append("• Consider break if score drops below 80\n\n")
                 append("📱 Device Processing Status: Active\n")
                 append("🔒 Privacy: ${if (_uiState.value.hasPartialAccess) "Selected access only" else "Full media access"}\n")
-                append("🧠 ML Processing: Real-time person detection with bounding boxes\n")
+                append("🧠 ML Processing: TensorFlow Lite COCO MobileNet SSD with real-time bounding boxes\n")
                 append("Last updated: Frame $currentFrames")
             }
 

@@ -130,11 +130,3 @@ private fun DrawScope.drawDetections(
         }
     }
 }
-
-// Extension function to get view dimensions
-@Composable
-fun getViewDimensions(): Pair<Int, Int> {
-    // This would be passed from the parent composable
-    // For now, return default values
-    return Pair(640, 480)
-}
