@@ -3,13 +3,20 @@ package com.example.monitoringsystem.viewmodels
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.provider.MediaStore
+import android.util.Log
 import androidx.activity.result.ActivityResultLauncher
+import androidx.annotation.OptIn
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
+import com.example.monitoringsystem.ml.DetectionResult
+import com.example.monitoringsystem.ml.PersonDetectionEngine
+import com.example.monitoringsystem.ml.VideoFrameExtractor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +30,18 @@ data class InCarMonitoringUiState(
     val frameCount: Int = 0,
     val summary: String = "",
     val videoSource: String = "Sample Video",
-    val selectedVideoUri: Uri? = null
+    val selectedVideoUri: Uri? = null,
+    val hasPartialAccess: Boolean = false,
+    val accessType: String = "None",
+    val detectionResult: DetectionResult? = null,
+    val detectionStats: DetectionStats = DetectionStats()
+)
+
+data class DetectionStats(
+    val totalDetections: Int = 0,
+    val averageInferenceTime: Float = 0f,
+    val peopleDetectedCount: Int = 0,
+    val lastDetectionTime: Long = 0L
 )
 
 class InCarMonitoringViewModel : ViewModel() {
@@ -31,13 +49,25 @@ class InCarMonitoringViewModel : ViewModel() {
     val uiState: StateFlow<InCarMonitoringUiState> = _uiState.asStateFlow()
 
     private var videoPickerLauncher: ActivityResultLauncher<Intent>? = null
+    private var personDetectionEngine: PersonDetectionEngine? = null
+    private var videoFrameExtractor: VideoFrameExtractor? = null
+    private var playerView: PlayerView? = null
 
     fun setVideoPickerLauncher(launcher: ActivityResultLauncher<Intent>) {
         videoPickerLauncher = launcher
     }
 
+    fun setPlayerView(view: PlayerView) {
+        playerView = view
+    }
+
     fun initializePlayer(context: Context) {
-        val player = ExoPlayer.Builder(context).build()
+        val player = ExoPlayer.Builder(context)
+            .build()
+
+        // Initialize ML components
+        personDetectionEngine = PersonDetectionEngine()
+        videoFrameExtractor = VideoFrameExtractor()
 
         // Load default video or selected video
         val uri = _uiState.value.selectedVideoUri
@@ -49,13 +79,12 @@ class InCarMonitoringViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(player = player)
     }
 
+
     fun openVideoPicker() {
         val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
             type = "video/*"
             addCategory(Intent.CATEGORY_OPENABLE)
         }
-
-//        val intent = Intent(Intent.ACTION_PICK, MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
         videoPickerLauncher?.launch(intent)
     }
 
@@ -92,29 +121,98 @@ class InCarMonitoringViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(
             isProcessing = true,
             frameCount = 0,
-            summary = ""
+            summary = "",
+            detectionResult = null,
+            detectionStats = DetectionStats()
         )
 
         _uiState.value.player?.play()
 
-        // Simulate frame processing
+        // Start frame processing with ML detection
         viewModelScope.launch {
             var frameCount = 0
             while (_uiState.value.isProcessing) {
-                delay(100) // Simulate processing delay
+                delay(100) // Process every 100ms (10 FPS for frame counting)
                 frameCount++
                 _uiState.value = _uiState.value.copy(frameCount = frameCount)
 
-                // Simulate AI summary generation every 50 frames
+                // Generate AI summary every 50 frames
                 if (frameCount % 50 == 0) {
                     generateAISummary()
                 }
             }
         }
+
+        // Start ML detection processing (separate coroutine for different timing)
+        startPersonDetection()
+    }
+
+    private fun startPersonDetection() {
+        viewModelScope.launch {
+            while (_uiState.value.isProcessing) {
+                processFrameForDetection()
+                delay(200) // Process ML detection every 200ms (5 FPS for ML)
+            }
+        }
+    }
+
+    private suspend fun processFrameForDetection() {
+        playerView?.let { view ->
+            videoFrameExtractor?.let { extractor ->
+                personDetectionEngine?.let { detector ->
+                    try {
+                        // Extract frame from video
+//                        val bitmap = extractor.extractFrameFromPlayerView(view)
+                        val bitmap = extractor.extractVideoFrameFromPlayerView(view)
+                        bitmap?.let { frame ->
+                            // Scale for optimal ML performance
+                            val scaledFrame = extractor.scaleBitmapForML(frame, 640)
+
+                            // Perform detection
+                            val result = detector.detectPersons(scaledFrame)
+
+                            // Update UI with results
+                            updateDetectionResults(result)
+
+                            // Clean up bitmaps
+                            if (scaledFrame != frame) {
+                                scaledFrame.recycle()
+                            }
+                            frame.recycle()
+                        }
+                    } catch (e: Exception) {
+                        // Handle detection errors gracefully
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateDetectionResults(result: DetectionResult) {
+        Log.d("InCarMonitoring", "updateDetectionResults: ${result.detections.size}")
+        val currentStats = _uiState.value.detectionStats
+        val newStats = currentStats.copy(
+            totalDetections = currentStats.totalDetections + 1,
+            averageInferenceTime = if (currentStats.totalDetections == 0) {
+                result.inferenceTimeMs.toFloat()
+            } else {
+                (currentStats.averageInferenceTime * currentStats.totalDetections + result.inferenceTimeMs) / (currentStats.totalDetections + 1)
+            },
+            peopleDetectedCount = if (result.detections.isNotEmpty())
+                currentStats.peopleDetectedCount + 1 else currentStats.peopleDetectedCount,
+            lastDetectionTime = System.currentTimeMillis()
+        )
+
+        _uiState.value = _uiState.value.copy(
+            detectionResult = result,
+            detectionStats = newStats
+        )
     }
 
     fun stopMonitoring() {
-        _uiState.value = _uiState.value.copy(isProcessing = false)
+        _uiState.value = _uiState.value.copy(
+            isProcessing = false
+        )
         _uiState.value.player?.pause()
     }
 
@@ -126,24 +224,50 @@ class InCarMonitoringViewModel : ViewModel() {
 
             val currentFrames = _uiState.value.frameCount
             val videoSource = _uiState.value.videoSource
+            val accessType = _uiState.value.accessType
+            val stats = _uiState.value.detectionStats
+            val currentDetections = _uiState.value.detectionResult?.detections?.size ?: 0
+
             val newSummary = buildString {
                 append("🚗 In-Car Analysis Report\n\n")
                 append("📊 Frames Processed: $currentFrames\n")
                 append("⏱️ Processing Time: ${currentFrames * 0.1f} seconds\n")
-                append("🎥 Video Source: $videoSource\n\n")
+                append("🎥 Video Source: $videoSource\n")
+                append("🔐 Access Type: $accessType\n\n")
+
+                append("🤖 Person Detection Status: ACTIVE\n")
+                append("👥 Total ML Detections: ${stats.totalDetections}\n")
+                append("🎯 People Detected: ${stats.peopleDetectedCount}\n")
+                append("👤 Current People in Frame: $currentDetections\n")
+                append("⚡ Avg Inference Time: ${stats.averageInferenceTime.toInt()}ms\n")
+                append("📅 Last Detection: ${if (stats.lastDetectionTime > 0) "Active" else "None"}\n\n")
+
                 append("🎯 Key Observations:\n")
-                append("• Driver appears alert and focused\n")
-                append("• Proper seating position maintained\n")
-                append("• No signs of distraction detected\n")
+                if (stats.peopleDetectedCount > 0) {
+                    append("• ${stats.peopleDetectedCount} person detection(s) recorded\n")
+                    if (currentDetections > 0) {
+                        append("• $currentDetections person(s) currently visible\n")
+                    }
+                    append("• Real-time ML inference active\n")
+                    append("• Bounding boxes displayed on video\n")
+                } else {
+                    append("• ML detection running, no people detected yet\n")
+                    append("• System ready to detect occupants\n")
+                }
+                append("• Monitoring system functioning optimally\n")
                 append("• Road conditions: Clear visibility\n")
                 append("• Rearview mirror perspective: Optimal\n\n")
+
                 append("📈 Safety Score: ${(85..98).random()}/100\n\n")
                 append("🔍 Recommendations:\n")
                 append("• Continue monitoring for fatigue signs\n")
                 append("• Maintain current driving behavior\n")
+                append("• Person detection enhancing safety monitoring\n")
                 append("• System functioning optimally\n")
                 append("• Consider break if score drops below 80\n\n")
                 append("📱 Device Processing Status: Active\n")
+                append("🔒 Privacy: ${if (_uiState.value.hasPartialAccess) "Selected access only" else "Full media access"}\n")
+                append("🧠 ML Processing: Real-time person detection with bounding boxes\n")
                 append("Last updated: Frame $currentFrames")
             }
 
@@ -155,6 +279,7 @@ class InCarMonitoringViewModel : ViewModel() {
     }
 
     fun releasePlayer() {
+        personDetectionEngine?.close()
         _uiState.value.player?.release()
         _uiState.value = _uiState.value.copy(player = null)
     }

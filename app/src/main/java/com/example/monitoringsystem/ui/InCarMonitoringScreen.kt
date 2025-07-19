@@ -1,5 +1,6 @@
 package com.example.monitoringsystem.ui
 
+import com.example.monitoringsystem.viewmodels.InCarMonitoringViewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -19,7 +20,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.ui.PlayerView
-import com.example.monitoringsystem.viewmodels.InCarMonitoringViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,6 +28,7 @@ fun InCarMonitoringScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    var playerView by remember { mutableStateOf<PlayerView?>(null) }
 
     LaunchedEffect(context) {
         viewModel.initializePlayer(context)
@@ -63,11 +64,11 @@ fun InCarMonitoringScreen(
             )
         }
 
-        // Video Player Section
+        // Video Player Section with Detection Overlay
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(320.dp),
+                .height(360.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surface
             )
@@ -94,24 +95,39 @@ fun InCarMonitoringScreen(
                     }
                 }
 
-                // Video Player
+                // Video Player with Bounding Box Overlay
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp)
+                        .height(240.dp)
                         .clip(RoundedCornerShape(8.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     if (uiState.player != null) {
+                        // Video Player
                         AndroidView(
                             factory = { ctx ->
                                 PlayerView(ctx).apply {
                                     player = uiState.player
                                     useController = false
+                                    playerView = this
+                                    viewModel.setPlayerView(this)
                                 }
                             },
                             modifier = Modifier.fillMaxSize()
                         )
+
+                        // Bounding Box Overlay (only show when processing and detection result exists)
+                        if (uiState.isProcessing && uiState.detectionResult != null) {
+                            BoundingBoxOverlay(
+                                detectionResult = uiState.detectionResult,
+                                videoWidth = uiState.detectionResult?.imageWidth ?: 0,
+                                videoHeight = uiState.detectionResult?.imageHeight ?: 0,
+                                viewWidth = 640, // Will be updated with actual dimensions
+                                viewHeight = 480,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     } else {
                         Card(
                             modifier = Modifier.fillMaxSize(),
@@ -133,7 +149,7 @@ fun InCarMonitoringScreen(
                     }
                 }
 
-                // Processing Status
+                // Processing and ML Detection Status
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -144,6 +160,7 @@ fun InCarMonitoringScreen(
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Video Processing Status
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
@@ -158,6 +175,23 @@ fun InCarMonitoringScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = if (uiState.isProcessing) Color.Green else Color.Gray
                         )
+
+                        // ML Detection Status
+                        if (uiState.isProcessing) {
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color.Blue)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "ML Active",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Blue
+                            )
+                        }
                     }
 
                     Text(
@@ -167,13 +201,36 @@ fun InCarMonitoringScreen(
                     )
                 }
 
-                // Video Source
-                Text(
-                    text = "Source: ${uiState.videoSource}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+                // Video Source and Detection Stats
+                Column {
+                    Text(
+                        text = "Source: ${uiState.videoSource}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    Text(
+                        text = "Access: ${uiState.accessType}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (uiState.hasPartialAccess)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+
+                    // Show detection stats when processing
+                    if (uiState.isProcessing && uiState.detectionStats.totalDetections > 0) {
+                        Text(
+                            text = "Detections: ${uiState.detectionStats.totalDetections} | " +
+                                    "People: ${uiState.detectionStats.peopleDetectedCount} | " +
+                                    "Avg: ${uiState.detectionStats.averageInferenceTime.toInt()}ms",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                }
             }
         }
 
@@ -276,7 +333,7 @@ fun InCarMonitoringScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "Start monitoring to see AI analysis...",
+                                    text = "Start monitoring to see AI analysis and person detection...",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                     textAlign = TextAlign.Center
