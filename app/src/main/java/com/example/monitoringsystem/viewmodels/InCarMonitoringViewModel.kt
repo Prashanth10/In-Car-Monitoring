@@ -4,25 +4,25 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
-import androidx.annotation.OptIn
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.example.monitoringsystem.ml.DetectionResult
 import com.example.monitoringsystem.ml.PersonDetectionEngine
 import com.example.monitoringsystem.ml.VideoFrameExtractor
 import com.example.monitoringsystem.network.AISummaryGenerator
+import com.example.monitoringsystem.network.BackendClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 data class InCarMonitoringUiState(
     val player: ExoPlayer? = null,
@@ -55,6 +55,9 @@ class InCarMonitoringViewModel : ViewModel() {
     private var aiSummaryGenerator: AISummaryGenerator? = null
     private var playerView: PlayerView? = null
 
+    private var backendClient: BackendClient? = null
+    private var sessionId: String = UUID.randomUUID().toString()
+
     fun setVideoPickerLauncher(launcher: ActivityResultLauncher<Intent>) {
         videoPickerLauncher = launcher
     }
@@ -74,12 +77,22 @@ class InCarMonitoringViewModel : ViewModel() {
         // Initialize AI Summary Generator
         aiSummaryGenerator = AISummaryGenerator()
 
+        // Initialize backend client
+        backendClient = BackendClient()
+
         // Load default video or selected video
         val uri = _uiState.value.selectedVideoUri
             ?: Uri.parse("android.resource://${context.packageName}/raw/in_car_sample_video")
 
         loadVideo(player, uri, context)
         player.repeatMode = Player.REPEAT_MODE_ALL
+
+        // Check backend health
+        viewModelScope.launch {
+            val isHealthy = backendClient?.checkBackendHealth() ?: false
+            Log.d("InCarMonitoring", "Backend health check: $isHealthy")
+            Toast.makeText(context, "Backend health check: $isHealthy", Toast.LENGTH_LONG).show()
+        }
 
         _uiState.value = _uiState.value.copy(player = player)
     }
@@ -112,7 +125,8 @@ class InCarMonitoringViewModel : ViewModel() {
             player.prepare()
         } catch (e: Exception) {
             // Fallback to default video if loading fails
-            val fallbackUri = Uri.parse("android.resource://${context.packageName}/raw/in_car_sample_video")
+            val fallbackUri =
+                Uri.parse("android.resource://${context.packageName}/raw/in_car_sample_video")
             val mediaItem = MediaItem.fromUri(fallbackUri)
             player.setMediaItem(mediaItem)
             player.prepare()
@@ -296,6 +310,26 @@ class InCarMonitoringViewModel : ViewModel() {
                     currentDetections = currentDetections
                 ) ?: "AI summary service not available"
 
+                // Send summary to backend
+                backendClient?.let { client ->
+                    launch {
+                        val success = client.sendSummaryToBackend(
+                            sessionId = sessionId,
+                            summary = aiSummary,
+                            frameCount = currentFrames,
+                            detectionStats = stats,
+                            videoSource = videoSource,
+                            processingTimeSeconds = processingTime
+                        )
+
+                        if (success) {
+                            Log.d("InCarMonitoring", "Summary successfully sent to backend")
+                        } else {
+                            Log.w("InCarMonitoring", "Failed to send summary to backend")
+                        }
+                    }
+                }
+
                 _uiState.value = _uiState.value.copy(
                     summary = aiSummary,
                     isGeneratingSummary = false
@@ -305,9 +339,10 @@ class InCarMonitoringViewModel : ViewModel() {
                 Log.e("InCarMonitoring", "Error generating AI summary: ${e.message}")
 
                 // Fallback to basic summary
-                val fallbackSummary = "🚗 Basic monitoring report: ${_uiState.value.frameCount} frames processed, " +
-                        "${_uiState.value.detectionStats.peopleDetectedCount} people detected. " +
-                        "AI summary temporarily unavailable."
+                val fallbackSummary =
+                    " Basic monitoring report: ${_uiState.value.frameCount} frames processed, " +
+                            "${_uiState.value.detectionStats.peopleDetectedCount} people detected. " +
+                            "AI summary temporarily unavailable."
 
                 _uiState.value = _uiState.value.copy(
                     summary = fallbackSummary,
@@ -316,6 +351,13 @@ class InCarMonitoringViewModel : ViewModel() {
             }
         }
     }
+
+//    fun testBackendConnection() {
+//        viewModelScope.launch {
+//            val result = backendClient?.testConnection() ?: "Backend client not initialized"
+//            Log.d("InCarMonitoring", "Backend test result: $result")
+//        }
+//    }
 
     fun releasePlayer() {
         personDetectionEngine?.close()

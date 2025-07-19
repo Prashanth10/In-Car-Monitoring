@@ -273,6 +273,15 @@ fun InCarMonitoringScreen(
             }
         }
 
+        //testing
+//        Button(
+//            onClick = {
+//                viewModel.testBackendConnection()
+//            }
+//        ) {
+//            Text("Test Backend")
+//        }
+
         // AI Summary Section
         Card(
             modifier = Modifier
