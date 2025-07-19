@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.monitoringsystem.ui.theme.MonitoringSystemTheme
 import com.example.monitoringsystem.viewmodels.InCarMonitoringViewModel
@@ -35,7 +36,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val viewModel: InCarMonitoringViewModel = viewModel()
-                    val context = this //LocalContext.current
+                    val context = LocalContext.current
 
                     // Video picker launcher
                     val videoPickerLauncher = rememberLauncherForActivityResult(

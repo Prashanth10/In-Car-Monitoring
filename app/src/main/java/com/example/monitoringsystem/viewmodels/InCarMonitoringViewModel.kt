@@ -17,6 +17,7 @@ import androidx.media3.ui.PlayerView
 import com.example.monitoringsystem.ml.DetectionResult
 import com.example.monitoringsystem.ml.PersonDetectionEngine
 import com.example.monitoringsystem.ml.VideoFrameExtractor
+import com.example.monitoringsystem.network.AISummaryGenerator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -51,6 +52,7 @@ class InCarMonitoringViewModel : ViewModel() {
     private var videoPickerLauncher: ActivityResultLauncher<Intent>? = null
     private var personDetectionEngine: PersonDetectionEngine? = null
     private var videoFrameExtractor: VideoFrameExtractor? = null
+    private var aiSummaryGenerator: AISummaryGenerator? = null
     private var playerView: PlayerView? = null
 
     fun setVideoPickerLauncher(launcher: ActivityResultLauncher<Intent>) {
@@ -68,6 +70,9 @@ class InCarMonitoringViewModel : ViewModel() {
         // Initialize ML components
         personDetectionEngine = PersonDetectionEngine(context)
         videoFrameExtractor = VideoFrameExtractor()
+
+        // Initialize AI Summary Generator
+        aiSummaryGenerator = AISummaryGenerator()
 
         // Load default video or selected video
         val uri = _uiState.value.selectedVideoUri
@@ -219,62 +224,96 @@ class InCarMonitoringViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(isGeneratingSummary = true)
 
         viewModelScope.launch {
-            delay(2000) // Simulate AI processing time
+//            delay(2000) // Simulate AI processing time
+//
+//            val currentFrames = _uiState.value.frameCount
+//            val videoSource = _uiState.value.videoSource
+//            val accessType = _uiState.value.accessType
+//            val stats = _uiState.value.detectionStats
+//            val currentDetections = _uiState.value.detectionResult?.detections?.size ?: 0
+//
+//            val newSummary = buildString {
+//                append("🚗 In-Car Analysis Report\n\n")
+//                append("📊 Frames Processed: $currentFrames\n")
+//                append("⏱️ Processing Time: ${currentFrames * 0.1f} seconds\n")
+//                append("🎥 Video Source: $videoSource\n")
+//                append("🔐 Access Type: $accessType\n\n")
+//
+//                append("🤖 TensorFlow Lite Person Detection: ACTIVE\n")
+//                append("👥 Total ML Detections: ${stats.totalDetections}\n")
+//                append("🎯 People Detected: ${stats.peopleDetectedCount}\n")
+//                append("👤 Current People in Frame: $currentDetections\n")
+//                append("⚡ Avg Inference Time: ${stats.averageInferenceTime.toInt()}ms\n")
+//                append("📅 Last Detection: ${if (stats.lastDetectionTime > 0) "Active" else "None"}\n\n")
+//
+//                append("🎯 Key Observations:\n")
+//                if (stats.peopleDetectedCount > 0) {
+//                    append("• ${stats.peopleDetectedCount} person detection(s) recorded\n")
+//                    if (currentDetections > 0) {
+//                        append("• $currentDetections person(s) currently visible\n")
+//                    }
+//                    append("• Real-time TensorFlow Lite inference active\n")
+//                    append("• COCO MobileNet SSD model running on-device\n")
+//                    append("• Bounding boxes displayed with confidence scores\n")
+//                } else {
+//                    append("• TensorFlow Lite detection running, no people detected yet\n")
+//                    append("• COCO-trained MobileNet SSD ready to detect occupants\n")
+//                }
+//                append("• Monitoring system functioning optimally\n")
+//                append("• Road conditions: Clear visibility\n")
+//                append("• Rearview mirror perspective: Optimal\n\n")
+//
+//                append("📈 Safety Score: ${(85..98).random()}/100\n\n")
+//                append("🔍 Recommendations:\n")
+//                append("• Continue monitoring for fatigue signs\n")
+//                append("• Maintain current driving behavior\n")
+//                append("• TensorFlow Lite person detection enhancing safety monitoring\n")
+//                append("• System functioning optimally\n")
+//                append("• Consider break if score drops below 80\n\n")
+//                append("📱 Device Processing Status: Active\n")
+//                append("🔒 Privacy: ${if (_uiState.value.hasPartialAccess) "Selected access only" else "Full media access"}\n")
+//                append("🧠 ML Processing: TensorFlow Lite COCO MobileNet SSD with real-time bounding boxes\n")
+//                append("Last updated: Frame $currentFrames")
+//            }
+//
+//            _uiState.value = _uiState.value.copy(
+//                summary = newSummary,
+//                isGeneratingSummary = false
+//            )
+            try {
+                val currentFrames = _uiState.value.frameCount
+                val videoSource = _uiState.value.videoSource
+                val stats = _uiState.value.detectionStats
+                val currentDetections = _uiState.value.detectionResult?.detections?.size ?: 0
+                val processingTime = currentFrames * 0.1f
 
-            val currentFrames = _uiState.value.frameCount
-            val videoSource = _uiState.value.videoSource
-            val accessType = _uiState.value.accessType
-            val stats = _uiState.value.detectionStats
-            val currentDetections = _uiState.value.detectionResult?.detections?.size ?: 0
+                // Generate AI summary using Gemini API
+                val aiSummary = aiSummaryGenerator?.generateAISummary(
+                    frameCount = currentFrames,
+                    detectionStats = stats,
+                    videoSource = videoSource,
+                    processingTimeSeconds = processingTime,
+                    currentDetections = currentDetections
+                ) ?: "AI summary service not available"
 
-            val newSummary = buildString {
-                append("🚗 In-Car Analysis Report\n\n")
-                append("📊 Frames Processed: $currentFrames\n")
-                append("⏱️ Processing Time: ${currentFrames * 0.1f} seconds\n")
-                append("🎥 Video Source: $videoSource\n")
-                append("🔐 Access Type: $accessType\n\n")
+                _uiState.value = _uiState.value.copy(
+                    summary = aiSummary,
+                    isGeneratingSummary = false
+                )
 
-                append("🤖 TensorFlow Lite Person Detection: ACTIVE\n")
-                append("👥 Total ML Detections: ${stats.totalDetections}\n")
-                append("🎯 People Detected: ${stats.peopleDetectedCount}\n")
-                append("👤 Current People in Frame: $currentDetections\n")
-                append("⚡ Avg Inference Time: ${stats.averageInferenceTime.toInt()}ms\n")
-                append("📅 Last Detection: ${if (stats.lastDetectionTime > 0) "Active" else "None"}\n\n")
+            } catch (e: Exception) {
+                Log.e("InCarMonitoring", "Error generating AI summary: ${e.message}")
 
-                append("🎯 Key Observations:\n")
-                if (stats.peopleDetectedCount > 0) {
-                    append("• ${stats.peopleDetectedCount} person detection(s) recorded\n")
-                    if (currentDetections > 0) {
-                        append("• $currentDetections person(s) currently visible\n")
-                    }
-                    append("• Real-time TensorFlow Lite inference active\n")
-                    append("• COCO MobileNet SSD model running on-device\n")
-                    append("• Bounding boxes displayed with confidence scores\n")
-                } else {
-                    append("• TensorFlow Lite detection running, no people detected yet\n")
-                    append("• COCO-trained MobileNet SSD ready to detect occupants\n")
-                }
-                append("• Monitoring system functioning optimally\n")
-                append("• Road conditions: Clear visibility\n")
-                append("• Rearview mirror perspective: Optimal\n\n")
+                // Fallback to basic summary
+                val fallbackSummary = "🚗 Basic monitoring report: ${_uiState.value.frameCount} frames processed, " +
+                        "${_uiState.value.detectionStats.peopleDetectedCount} people detected. " +
+                        "AI summary temporarily unavailable."
 
-                append("📈 Safety Score: ${(85..98).random()}/100\n\n")
-                append("🔍 Recommendations:\n")
-                append("• Continue monitoring for fatigue signs\n")
-                append("• Maintain current driving behavior\n")
-                append("• TensorFlow Lite person detection enhancing safety monitoring\n")
-                append("• System functioning optimally\n")
-                append("• Consider break if score drops below 80\n\n")
-                append("📱 Device Processing Status: Active\n")
-                append("🔒 Privacy: ${if (_uiState.value.hasPartialAccess) "Selected access only" else "Full media access"}\n")
-                append("🧠 ML Processing: TensorFlow Lite COCO MobileNet SSD with real-time bounding boxes\n")
-                append("Last updated: Frame $currentFrames")
+                _uiState.value = _uiState.value.copy(
+                    summary = fallbackSummary,
+                    isGeneratingSummary = false
+                )
             }
-
-            _uiState.value = _uiState.value.copy(
-                summary = newSummary,
-                isGeneratingSummary = false
-            )
         }
     }
 
