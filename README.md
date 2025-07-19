@@ -1,5 +1,3 @@
-## **2. Android README.md**
-
 ```markdown
 # In-Car Monitoring Android Application
 
