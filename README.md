@@ -1,4 +1,3 @@
-```markdown
 # In-Car Monitoring Android Application
 
 Android application with real-time person detection, AI analysis, and backend communication.
