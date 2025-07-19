@@ -23,4 +23,3 @@ Android application with real-time person detection, AI analysis, and backend co
 ### 1. Clone and Open Project
 ```bash
 git clone <repository-url>
-cd InCarMonitoringProject/android
