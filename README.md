@@ -23,3 +23,9 @@ Android application with real-time person detection, AI analysis, and backend co
 ### 1. Clone and Open Project
 ```bash
 git clone <repository-url>
+```
+
+### API Key Setup
+1. Get a free Gemini API key from Google AI Studio
+2. Add to `local.properties`:
+**Note:** The key name must be exactly `GEMINI_API_KEY` as referenced in the code.
