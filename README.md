@@ -29,3 +29,6 @@ git clone <repository-url>
 1. Get a free Gemini API key from Google AI Studio
 2. Add to `local.properties`:
 **Note:** The key name must be exactly `GEMINI_API_KEY` as referenced in the code.
+
+
+## [Backend Repo] (https://github.com/Prashanth10/In_Car_Monitoring_App_Backend)
